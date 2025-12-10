@@ -8,7 +8,7 @@ import com.jeanfrias.ordering.provider.DispatchProvider;
 public class LoggiProvider implements DispatchProvider {
 
     @Override
-    public boolean dispatch(String orderId) {
+    public boolean schedule(String orderId) {
         System.out.println("Loggi - Dispatching order " + orderId);
         return true;
     }
