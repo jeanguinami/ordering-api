@@ -5,6 +5,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Service;
 
+import com.jeanfrias.ordering.domain.OrderConstants;
 import com.jeanfrias.ordering.domain.OrderRequest;
 import com.jeanfrias.ordering.domain.OrderResponse;
 import com.jeanfrias.ordering.domain.PaymentStatus;
@@ -44,20 +45,20 @@ public class OrderProcessor {
                     true);
         }
 
-        var payment = payments.getOrDefault("stripe", payments.values().iterator().next());
-        var pos = poses.getOrDefault("epos", poses.values().iterator().next());
-        var dispatch = dispatches.getOrDefault("loggi", dispatches.values().iterator().next());
+        var payment = payments.getOrDefault(OrderConstants.PROVIDER_STRIPE, payments.values().iterator().next());
+        var pos = poses.getOrDefault(OrderConstants.PROVIDER_EPOS, poses.values().iterator().next());
+        var dispatch = dispatches.getOrDefault(OrderConstants.PROVIDER_LOGGI, dispatches.values().iterator().next());
 
         boolean isAuthorized = false;
         boolean isVoided = false;
-        String posStatus = "PENDING";
-        String dispatchStatus = "PENDING";
+        String posStatus = OrderConstants.STATUS_PENDING;
+        String dispatchStatus = OrderConstants.STATUS_PENDING;
 
         if (!payment.authorize(orderRequest.orderId(), orderRequest.amount())) {
             return save(orderRequest.idempotencyKey(), new OrderResponse(
-                    orderRequest.orderId(), "FAILED", "AUTH_FAIL",
+                    orderRequest.orderId(), OrderConstants.STATUS_FAILED, OrderConstants.REASON_AUTH_FAIL,
                     new PaymentStatus(false, false, false),
-                    "SKIPPED", "SKIPPED", false));
+                    OrderConstants.STATUS_SKIPPED, OrderConstants.STATUS_SKIPPED, false));
         }
 
         isAuthorized = true;
@@ -65,35 +66,35 @@ public class OrderProcessor {
         if (!pos.sendOrder(orderRequest.orderId(), orderRequest.amount())) {
             payment.voidPayment(orderRequest.orderId());
             isVoided = true;
-            posStatus = "ERROR";
+            posStatus = OrderConstants.STATUS_ERROR;
 
             return save(orderRequest.idempotencyKey(), new OrderResponse(
-                    orderRequest.orderId(), "FAILED", "POS_UNAVAILABLE",
+                    orderRequest.orderId(), OrderConstants.STATUS_FAILED, OrderConstants.REASON_POS_UNAVAILABLE,
                     new PaymentStatus(isAuthorized, false, isVoided),
-                    posStatus, "SKIPPED", false));
+                    posStatus, OrderConstants.STATUS_SKIPPED, false));
         }
 
-        posStatus = "OK";
+        posStatus = OrderConstants.STATUS_OK;
 
         if (!payment.capture(orderRequest.orderId())) {
             return save(orderRequest.idempotencyKey(), new OrderResponse(
-                    orderRequest.orderId(), "FAILED", "CAPTURE_FAIL",
+                    orderRequest.orderId(), OrderConstants.STATUS_FAILED, OrderConstants.REASON_CAPTURE_FAIL,
                     new PaymentStatus(isAuthorized, false, isVoided),
-                    posStatus, "SKIPPED", false));
+                    posStatus, OrderConstants.STATUS_SKIPPED, false));
         }
 
         if (dispatch.schedule(orderRequest.orderId())) {
-            dispatchStatus = "SCHEDULED";
+            dispatchStatus = OrderConstants.STATUS_SCHEDULED;
         } else {
-            dispatchStatus = "FAILED";
+            dispatchStatus = OrderConstants.STATUS_FAILED;
             return save(orderRequest.idempotencyKey(), new OrderResponse(
-                    orderRequest.orderId(), "FAILED", "DISPATCH_UNAVAILABLE",
+                    orderRequest.orderId(), OrderConstants.STATUS_FAILED, OrderConstants.REASON_DISPATCH_UNAVAILABLE,
                     new PaymentStatus(isAuthorized, true, false),
                     posStatus, dispatchStatus, false));
         }
 
         return save(orderRequest.idempotencyKey(), new OrderResponse(
-                orderRequest.orderId(), "PROCESSED", null,
+                orderRequest.orderId(), OrderConstants.STATUS_PROCESSED, null,
                 new PaymentStatus(isAuthorized, true, false),
                 posStatus, dispatchStatus, false));
     }
