@@ -18,7 +18,7 @@
 
 ### 1. Compensating Transactions
 **File:** `service/OrderProcessor.java` (Line 80)
-* **Decision:** We implement a manual compensation step where `payment.voidPayment()` is triggered immediately if `pos.sendOrder()` fails.
+* **Decision:** I implement a manual compensation step where `payment.voidPayment()` is triggered immediately if `pos.sendOrder()` fails.
 * **Reasoning:** Ensures consistency between Payment Gateway and POS. Prevents "Ghost Charges" where a customer is charged for an order the restaurant never received.
 
 ### 2. Fail-Fast Authorization
